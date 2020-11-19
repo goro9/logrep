@@ -40,8 +40,8 @@ type LogExplorer struct {
 }
 
 type context struct {
-	paths   []string
 	path    string
+	target  string
 	version string
 	ringBuf *ring.Ring
 	result  []LogExplorerResult
@@ -57,7 +57,7 @@ func main() {
 		le := LogExplorer{
 			Dir:    dir,
 			Target: "W",
-			RowNum: 5,
+			RowNum: 1,
 		}
 		lers, _ := le.logrep()
 		fmt.Println("")
@@ -91,9 +91,9 @@ func dirwalk(dir string) []string {
 
 func (le *LogExplorer) logrep() (*[]LogExplorerResult, error) {
 	ctx := context{
-		paths:   dirwalk(le.Dir),
 		version: "unknown", // TODO: catch up runnning software version
 		ringBuf: ring.New(le.RowNum),
+		target:  le.Target,
 	}
 
 	for _, path := range dirwalk(le.Dir) {
@@ -135,7 +135,11 @@ func searchFile(ctx *context) error {
 			LogBuffer: logBuf,
 		}
 
-		if strings.Contains(ctx.ringBuf.Value.(LogBufferFull).Log, "W") {
+		if isVer, ver := getVersion(string(lb)); isVer {
+			ctx.version = ver
+		}
+
+		if strings.Contains(ctx.ringBuf.Value.(LogBufferFull).Log, ctx.target) {
 			var ler LogExplorerResult
 			ler.Version = ctx.version
 			ctx.ringBuf.Do((func(v interface{}) {
@@ -152,7 +156,14 @@ func searchFile(ctx *context) error {
 }
 
 func getVersion(l string) (bool, string) {
-	return false, "unknown"
+	containsString := "cpu_start: App version:"
+	hit := strings.Contains(l, containsString)
+	version := "unknown"
+	if hit {
+		buf := strings.Split(l, " ")
+		version = buf[len(buf)-1]
+	}
+	return hit, version
 }
 
 func newLogBuffer(l string) (LogBuffer, error) {
