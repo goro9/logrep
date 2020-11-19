@@ -14,20 +14,29 @@ import (
 	"time"
 )
 
-type logBuffer struct {
+type LogBuffer struct {
 	Time time.Time
 	Log  string
 }
 
 type LogExplorerResult struct {
 	Version string
-	Logs    []logBuffer
+	Logs    []LogBuffer
 }
 
 type LogExplorer struct {
-	Paths  []string
+	Dir    string
 	Target string
 	RowNum int
+}
+
+type context struct {
+	paths      []string
+	path       string
+	version    string
+	ringBuf    *ring.Ring
+	result     []LogExplorerResult
+	timeLayout string
 }
 
 func main() {
@@ -38,9 +47,9 @@ func main() {
 	} else {
 		dir = args[0]
 		le := LogExplorer{
-			dirwalk(dir),
-			"W",
-			5,
+			Dir:    dir,
+			Target: "W",
+			RowNum: 5,
 		}
 		lers, _ := le.logrep()
 		fmt.Println("")
@@ -73,47 +82,86 @@ func dirwalk(dir string) []string {
 }
 
 func (le *LogExplorer) logrep() (*[]LogExplorerResult, error) {
-	var lers []LogExplorerResult
-	// TODO: catch up runnning software version
-	version := "unknown"
-	rbLogs := ring.New(le.RowNum)
-	for _, p := range le.Paths {
-		f, err := os.Open(p)
+	ctx := context{
+		paths:      dirwalk(le.Dir),
+		version:    "unknown", // TODO: catch up runnning software version
+		ringBuf:    ring.New(le.RowNum),
+		timeLayout: time.RFC3339Nano,
+	}
+
+	for _, path := range dirwalk(le.Dir) {
+		ctx.path = path
+		err := searchFile(&ctx)
 		if err != nil {
 			return nil, err
 		}
-		defer f.Close()
-
-		reader := bufio.NewReader(f)
-
-		lNum := 0
-		for {
-			lNum++
-			lb, _, err := reader.ReadLine()
-			if err == io.EOF {
-				break
-			}
-			if err != nil {
-				return nil, err
-			}
-
-			rbLogs.Value = logBuffer{
-				time.Now(), // TODO: get time from log
-				string(lb), // TODO: get only text part of log
-			}
-			if strings.Contains(rbLogs.Value.(logBuffer).Log, "W") {
-				var ler LogExplorerResult
-				ler.Version = version
-				rbLogs.Do((func(v interface{}) {
-					if v == nil {
-						return
-					}
-					ler.Logs = append(ler.Logs, v.(logBuffer))
-				}))
-				lers = append(lers, ler)
-			}
-			rbLogs = rbLogs.Next()
-		}
 	}
-	return &lers, nil
+	return &ctx.result, nil
+}
+
+func searchFile(ctx *context) error {
+	f, err := os.Open(ctx.path)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	reader := bufio.NewReader(f)
+
+	lNum := 0
+	for {
+		lNum++
+		lb, _, err := reader.ReadLine()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return err
+		}
+
+		ctx.ringBuf.Value, err = newLogBuffer(ctx.timeLayout, string(lb))
+		if err != nil {
+			continue
+		}
+
+		if strings.Contains(ctx.ringBuf.Value.(LogBuffer).Log, "W") {
+			var ler LogExplorerResult
+			ler.Version = ctx.version
+			ctx.ringBuf.Do((func(v interface{}) {
+				if v == nil {
+					return
+				}
+				ler.Logs = append(ler.Logs, v.(LogBuffer))
+			}))
+			ctx.result = append(ctx.result, ler)
+		}
+		ctx.ringBuf = ctx.ringBuf.Next()
+	}
+	return nil
+}
+
+func newLogBuffer(timeLayout string, l string) (LogBuffer, error) {
+	buf := strings.SplitN(l, " : ", 2)
+	if len(buf) == 1 {
+		return LogBuffer{
+			Log: l,
+		}, nil
+	}
+
+	// TODO: deal with location
+	timeString := strings.Replace(buf[0], " ", "T", 1)
+	timeString = strings.Replace(timeString, ",", ".", 1)
+	timeString = timeString + "Z"
+	time, err := time.Parse(timeLayout, timeString)
+	if err != nil {
+		fmt.Println(err)
+		return LogBuffer{}, err
+	}
+
+	log := buf[1]
+
+	return LogBuffer{
+		Time: time,
+		Log:  log,
+	}, nil
 }
