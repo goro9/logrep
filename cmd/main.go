@@ -97,8 +97,12 @@ func (le *LogExplorer) logrep() (*[]LogExplorerResult, error) {
 	}
 
 	for _, path := range dirwalk(le.Dir) {
+		// TODO: filter by file timestamp
+		finfo, err := os.Stat(path)
+		fmt.Println(finfo.ModTime())
+
 		ctx.path = path
-		err := searchFile(&ctx)
+		err = searchFile(&ctx)
 		if err != nil {
 			return nil, err
 		}
