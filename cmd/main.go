@@ -29,12 +29,13 @@ type LogBuffer struct {
 }
 
 type LogExplorerResult struct {
+	Path    string
 	Version string
 	Logs    []LogBufferFull
 }
 
 func (ler LogExplorerResult) String() string {
-	bufs := []string{fmt.Sprintf("version=%v", ler.Version)}
+	bufs := []string{fmt.Sprintf("version=%v, path=%v", ler.Version, ler.Path)}
 	for _, log := range ler.Logs {
 		bufs = append(bufs, fmt.Sprintf("\n%v", log))
 	}
@@ -55,22 +56,28 @@ type context struct {
 	result  []LogExplorerResult
 }
 
+const (
+	ARG_NUM = 2
+)
+
 func main() {
 	flag.Parse()
 	var dir string
-	if args := flag.Args(); len(args) == 0 {
-		fmt.Println("input target directory path")
+	if args := flag.Args(); len(args) < ARG_NUM {
+		fmt.Println("input required arguments")
 	} else {
 		dir = args[0]
+		outPath := args[1]
 		le := LogExplorer{
 			Dir:    dir,
 			Target: "W",
 			RowNum: 10,
 		}
 		lers, _ := le.logrep()
-		fmt.Println("")
-		for i, v := range *lers {
-			fmt.Printf("%v: %v\n", i, v)
+
+		err := createFile(outPath, lers)
+		if err != nil {
+			fmt.Println(err)
 		}
 	}
 }
@@ -115,6 +122,22 @@ func (le *LogExplorer) logrep() (*[]LogExplorerResult, error) {
 	return &ctx.result, nil
 }
 
+func createFile(path string, lers *[]LogExplorerResult) error {
+	f, err := os.Create(path)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	for i, ler := range *lers {
+		_, err = f.WriteString(fmt.Sprintf("%v: %v\n", i, ler))
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func searchFile(ctx *context) error {
 	f, err := os.Open(ctx.path)
 	if err != nil {
@@ -150,6 +173,7 @@ func searchFile(ctx *context) error {
 
 		if strings.Contains(ctx.ringBuf.Value.(LogBufferFull).Log, ctx.target) {
 			var ler LogExplorerResult
+			ler.Path = ctx.path
 			ler.Version = ctx.version
 			ctx.ringBuf.Do((func(v interface{}) {
 				if v == nil {
