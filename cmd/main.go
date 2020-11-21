@@ -20,7 +20,7 @@ type LogBufferFull struct {
 }
 
 func (lb LogBufferFull) String() string {
-	return fmt.Sprintf("\t%v: time=%v, log=%v", lb.Row, lb.Time, lb.Log)
+	return fmt.Sprintf("\t%v: time=%v, log=%v", lb.Row, lb.Time.Format(time.RFC3339Nano), lb.Log)
 }
 
 type LogBuffer struct {
@@ -31,6 +31,14 @@ type LogBuffer struct {
 type LogExplorerResult struct {
 	Version string
 	Logs    []LogBufferFull
+}
+
+func (ler LogExplorerResult) String() string {
+	bufs := []string{fmt.Sprintf("version=%v", ler.Version)}
+	for _, log := range ler.Logs {
+		bufs = append(bufs, fmt.Sprintf("\n%v", log))
+	}
+	return strings.Join(bufs, "")
 }
 
 type LogExplorer struct {
@@ -57,15 +65,12 @@ func main() {
 		le := LogExplorer{
 			Dir:    dir,
 			Target: "W",
-			RowNum: 1,
+			RowNum: 10,
 		}
 		lers, _ := le.logrep()
 		fmt.Println("")
 		for i, v := range *lers {
-			fmt.Printf("%v: version=%v, logs=\n", i, v.Version)
-			for _, log := range v.Logs {
-				fmt.Println(log)
-			}
+			fmt.Printf("%v: %v\n", i, v)
 		}
 	}
 }
