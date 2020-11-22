@@ -16,13 +16,13 @@ func main() {
 	} else {
 		dir = args[0]
 		outPath := args[1]
-		tStart, _ := time.Parse(time.RFC3339, "2020-08-20T00:00:00+09:00")
-		tEnd, _ := time.Parse(time.RFC3339, "2020-08-21T00:00:00+09:00")
+		tStart, _ := time.Parse(time.RFC3339, "2020-11-20T00:00:00+09:00")
+		tEnd, _ := time.Parse(time.RFC3339, "2020-12-31T00:00:00+09:00")
 		le := logex.LogExplorer{
 			Dir:                  dir,
-			Target:               "W",
-			RowNum:               10,
-			VersionConstraintStr: ">=0",
+			Target:               "queue is full",
+			RowNum:               20,
+			VersionConstraintStr: ">=1.2.4",
 			FilterTimeStart:      tStart,
 			FilterTimeEnd:        tEnd,
 		}

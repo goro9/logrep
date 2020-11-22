@@ -184,6 +184,7 @@ func searchFile(ctx *context) error {
 				}
 				ler.Logs = append(ler.Logs, v.(LogBufferFull))
 			}))
+			ler.Logs = append(ler.Logs[1:], ler.Logs[0])
 			ctx.result = append(ctx.result, ler)
 		}
 		ctx.ringBuf = ctx.ringBuf.Next()
