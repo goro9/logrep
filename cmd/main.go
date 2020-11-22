@@ -12,6 +12,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/hashicorp/go-version"
 )
 
 type LogBufferFull struct {
@@ -29,13 +31,13 @@ type LogBuffer struct {
 }
 
 type LogExplorerResult struct {
-	Path    string
-	Version string
-	Logs    []LogBufferFull
+	Path string
+	Ver  *version.Version
+	Logs []LogBufferFull
 }
 
 func (ler LogExplorerResult) String() string {
-	bufs := []string{fmt.Sprintf("version=%v, path=%v", ler.Version, ler.Path)}
+	bufs := []string{fmt.Sprintf("ver=%v, path=%v", ler.Ver, ler.Path)}
 	for _, log := range ler.Logs {
 		bufs = append(bufs, fmt.Sprintf("\n%v", log))
 	}
@@ -51,7 +53,7 @@ type LogExplorer struct {
 type context struct {
 	path    string
 	target  string
-	version string
+	ver     *version.Version
 	ringBuf *ring.Ring
 	result  []LogExplorerResult
 }
@@ -103,7 +105,7 @@ func dirwalk(dir string) []string {
 
 func (le *LogExplorer) logrep() (*[]LogExplorerResult, error) {
 	ctx := context{
-		version: "unknown", // TODO: catch up runnning software version
+		// TODO: catch up runnning software version
 		ringBuf: ring.New(le.RowNum),
 		target:  le.Target,
 	}
@@ -168,13 +170,16 @@ func searchFile(ctx *context) error {
 		}
 
 		if isVer, ver := getVersion(string(lb)); isVer {
-			ctx.version = ver
+			ctx.ver, _ = version.NewVersion(ver)
+			if err != nil {
+				fmt.Printf("version log pattern found but invalid version format: %v", err)
+			}
 		}
 
 		if strings.Contains(ctx.ringBuf.Value.(LogBufferFull).Log, ctx.target) {
 			var ler LogExplorerResult
 			ler.Path = ctx.path
-			ler.Version = ctx.version
+			ler.Ver = ctx.ver
 			ctx.ringBuf.Do((func(v interface{}) {
 				if v == nil {
 					return
@@ -195,6 +200,10 @@ func getVersion(l string) (bool, string) {
 	if hit {
 		buf := strings.Split(l, " ")
 		version = buf[len(buf)-1]
+		// remove "v"
+		version = version[1:]
+		// remove ANSI escape sequence
+		version = strings.Replace(version, "\033[0m", "", 1)
 	}
 	return hit, version
 }
