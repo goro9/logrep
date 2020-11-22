@@ -120,7 +120,6 @@ func (le *LogExplorer) logrep() (*[]LogExplorerResult, error) {
 		return nil, err
 	}
 	ctx := context{
-		// TODO: catch up runnning software version
 		ringBuf:            ring.New(le.RowNum),
 		target:             le.Target,
 		versionConstraints: constraints,
@@ -129,7 +128,6 @@ func (le *LogExplorer) logrep() (*[]LogExplorerResult, error) {
 	}
 
 	for _, path := range dirwalk(le.Dir) {
-		// TODO: filter by file timestamp
 		finfo, err := os.Stat(path)
 		fts := finfo.ModTime()
 		fmt.Println(fts)
@@ -192,6 +190,8 @@ func searchFile(ctx *context) error {
 			LogBuffer: logBuf,
 		}
 
+		// TODO: filter by timestamp?
+
 		if isVer, ver := getVersion(string(lb)); isVer {
 			ctx.ver, _ = version.NewVersion(ver)
 			if err != nil {
@@ -243,10 +243,10 @@ func newLogBuffer(l string) (LogBuffer, error) {
 		}, nil
 	}
 
-	// TODO: deal with location
 	timeString := strings.Replace(buf[0], " ", "T", 1)
 	timeString = strings.Replace(timeString, ",", ".", 1)
-	timeString = timeString + "Z"
+	// TODO: deal with location
+	timeString = timeString + "+09:00"
 	time, err := time.Parse(time.RFC3339Nano, timeString)
 	if err != nil {
 		fmt.Println(err)
