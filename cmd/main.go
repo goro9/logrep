@@ -130,9 +130,8 @@ func (le *LogExplorer) logrep() (*[]LogExplorerResult, error) {
 	for _, path := range dirwalk(le.Dir) {
 		finfo, err := os.Stat(path)
 		fts := finfo.ModTime()
-		fmt.Println(fts)
 		if !timeWithin(fts, ctx.filterTimeStart, ctx.filterTimeEnd) {
-			fmt.Println("skip")
+			ctx.ver = nil
 			continue
 		}
 
