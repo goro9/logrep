@@ -48,6 +48,8 @@ type LogExplorer struct {
 	Dir                  string
 	Target               string
 	RowNum               int
+	FilterTimeStart      time.Time
+	FilterTimeEnd        time.Time
 	VersionConstraintStr string
 }
 
@@ -57,6 +59,8 @@ type context struct {
 	ver                *version.Version
 	ringBuf            *ring.Ring
 	result             []LogExplorerResult
+	filterTimeStart    time.Time
+	filterTimeEnd      time.Time
 	versionConstraints version.Constraints
 }
 
@@ -72,11 +76,15 @@ func main() {
 	} else {
 		dir = args[0]
 		outPath := args[1]
+		tStart, _ := time.Parse(time.RFC3339, "2020-08-20T00:00:00+09:00")
+		tEnd, _ := time.Parse(time.RFC3339, "2020-08-21T00:00:00+09:00")
 		le := LogExplorer{
 			Dir:                  dir,
 			Target:               "W",
 			RowNum:               10,
-			VersionConstraintStr: ">= 1.0.28",
+			VersionConstraintStr: ">=0",
+			FilterTimeStart:      tStart,
+			FilterTimeEnd:        tEnd,
 		}
 		lers, _ := le.logrep()
 
@@ -116,12 +124,19 @@ func (le *LogExplorer) logrep() (*[]LogExplorerResult, error) {
 		ringBuf:            ring.New(le.RowNum),
 		target:             le.Target,
 		versionConstraints: constraints,
+		filterTimeStart:    le.FilterTimeStart,
+		filterTimeEnd:      le.FilterTimeEnd,
 	}
 
 	for _, path := range dirwalk(le.Dir) {
 		// TODO: filter by file timestamp
 		finfo, err := os.Stat(path)
-		fmt.Println(finfo.ModTime())
+		fts := finfo.ModTime()
+		fmt.Println(fts)
+		if !timeWithin(fts, ctx.filterTimeStart, ctx.filterTimeEnd) {
+			fmt.Println("skip")
+			continue
+		}
 
 		ctx.path = path
 		err = searchFile(&ctx)
@@ -244,4 +259,11 @@ func newLogBuffer(l string) (LogBuffer, error) {
 		Time: time,
 		Log:  log,
 	}, nil
+}
+
+func timeWithin(t time.Time, tStart time.Time, tEnd time.Time) bool {
+	if tStart.Unix() < t.Unix() && t.Unix() < tEnd.Unix() {
+		return true
+	}
+	return false
 }
