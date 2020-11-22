@@ -45,17 +45,19 @@ func (ler LogExplorerResult) String() string {
 }
 
 type LogExplorer struct {
-	Dir    string
-	Target string
-	RowNum int
+	Dir                  string
+	Target               string
+	RowNum               int
+	VersionConstraintStr string
 }
 
 type context struct {
-	path    string
-	target  string
-	ver     *version.Version
-	ringBuf *ring.Ring
-	result  []LogExplorerResult
+	path               string
+	target             string
+	ver                *version.Version
+	ringBuf            *ring.Ring
+	result             []LogExplorerResult
+	versionConstraints version.Constraints
 }
 
 const (
@@ -71,9 +73,10 @@ func main() {
 		dir = args[0]
 		outPath := args[1]
 		le := LogExplorer{
-			Dir:    dir,
-			Target: "W",
-			RowNum: 10,
+			Dir:                  dir,
+			Target:               "W",
+			RowNum:               10,
+			VersionConstraintStr: ">= 1.0.28",
 		}
 		lers, _ := le.logrep()
 
@@ -104,10 +107,15 @@ func dirwalk(dir string) []string {
 }
 
 func (le *LogExplorer) logrep() (*[]LogExplorerResult, error) {
+	constraints, err := version.NewConstraint(le.VersionConstraintStr)
+	if err != nil {
+		return nil, err
+	}
 	ctx := context{
 		// TODO: catch up runnning software version
-		ringBuf: ring.New(le.RowNum),
-		target:  le.Target,
+		ringBuf:            ring.New(le.RowNum),
+		target:             le.Target,
+		versionConstraints: constraints,
 	}
 
 	for _, path := range dirwalk(le.Dir) {
@@ -174,6 +182,10 @@ func searchFile(ctx *context) error {
 			if err != nil {
 				fmt.Printf("version log pattern found but invalid version format: %v", err)
 			}
+		}
+
+		if ctx.ver != nil && !ctx.versionConstraints.Check(ctx.ver) {
+			continue
 		}
 
 		if strings.Contains(ctx.ringBuf.Value.(LogBufferFull).Log, ctx.target) {
