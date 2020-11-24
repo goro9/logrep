@@ -52,6 +52,11 @@ type LogExplorer struct {
 	VersionConstraintStr string
 }
 
+type LogExIf interface {
+	Parser(l string) (LogBuffer, error)
+	VersionParser(l string) (bool, string)
+}
+
 type context struct {
 	path               string
 	target             string
